@@ -6,10 +6,15 @@ import DesertAnt
 /// with the JS/Python reference via the shared span corpus (see parity_gen.py).
 enum Deterministic {
     static let owned: Set<String> = [
-        "EMAIL", "URL", "IP_ADDRESS", "CREDIT_CARD", "SSN",
+        "EMAIL", "URL", "IPV4_ADDRESS", "IPV6_ADDRESS", "MAC_ADDRESS", "CREDIT_CARD", "SSN",
         "BANK_ACCOUNT", "ROUTING_NUMBER", "TAX_ID", "GOVERNMENT_ID", "PASSPORT",
-        "DRIVERS_LICENSE", "IMEI",
+        "DRIVERS_LICENSE", "IMEI", notPersonal,
     ]
+
+    /// An address that is the same on every machine, like 127.0.0.1 or ff02::1,
+    /// so it identifies no one. Its span hides the text from the model and wins
+    /// any overlap, and no ``Label`` lets it through, so the text stays as it is.
+    static let notPersonal = "NOT_PERSONAL"
 
     // MARK: patterns
     private static let emailRE = rx(#"(?<![A-Za-z0-9.!#$%&'*+/=?^_`{|}~-])([\p{L}\p{N}.!#$%&'*+/=?^`{|}~-]{1,64}@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63})(?![A-Za-z0-9-])"#)
@@ -234,6 +239,28 @@ enum Deterministic {
         }
         return false
     }
+    /// Unspecified (0/8), loopback (127/8), multicast (224/4), reserved and broadcast (240/4).
+    private static func isWellKnownIPv4(_ v: String) -> Bool {
+        guard let first = Int(v.prefix { $0 != "." }) else { return false }
+        return first == 0 || first == 127 || first >= 224
+    }
+    /// Loopback (::1), multicast (ff00::/8), and the unassigned fe00::/9 that
+    /// hosts files name ip6-localnet. Link-local fe80::/10 is not here: it can
+    /// carry the interface's MAC address.
+    private static func isWellKnownIPv6(_ v: String) -> Bool {
+        if v == "::1" { return true }
+        guard !v.hasPrefix(":"), let head = v.split(separator: ":").first,
+              let group = UInt16(head, radix: 16) else { return false }
+        return group >= 0xff00 || (0xfe00..<0xfe80).contains(group)
+    }
+    /// The IPv6 pattern also matches a colon-separated MAC address.
+    private static func isMac(_ v: String) -> Bool { v.utf16.count == 17 && macRE.test(v) }
+    /// The label for a span the model called IP_ADDRESS, from its shape.
+    static func addressLabel(_ v: String) -> String? {
+        if isMac(v) { return "MAC_ADDRESS" }
+        guard isIp(v) else { return nil }
+        return ipv4ShapeRE.test(v) ? "IPV4_ADDRESS" : "IPV6_ADDRESS"
+    }
     // trim a document-keyword value that swallowed a following lowercase word
     private static func trimWord(_ t: UTF16Text, _ val0: String, _ end0: Int) -> (String, Int) {
         var chars = Array(val0), end = end0
@@ -264,9 +291,17 @@ enum Deterministic {
         // No context for IPv4, unlike the Python reference: a hosts file or `ip addr`
         // output rarely says "ip" or "address" next to each line, and missing an
         // address costs more than masking a four-part version like 1.0.0.0.
-        for m in ipv4RE.allMatches(text) { if isIp(m.group(0)!) { add(m.start, m.end, "IP_ADDRESS") } }
-        for m in ipv6RE.allMatches(text) { let v = m.group(0)!; if v == ":" || v == "::" { continue }; if isIp(v) && hasContext(ipv6Context, t, m.start, m.end, 40) { add(m.start, m.end, "IP_ADDRESS") } }
-        for m in macRE.allMatches(text) { add(m.start, m.end, "IP_ADDRESS") }
+        for m in ipv4RE.allMatches(text) {
+            let v = m.group(0)!
+            if isIp(v) { add(m.start, m.end, isWellKnownIPv4(v) ? notPersonal : "IPV4_ADDRESS") }
+        }
+        for m in ipv6RE.allMatches(text) {
+            let v = m.group(0)!
+            if v == ":" || v == "::" || isMac(v) || !isIp(v) { continue }
+            if isWellKnownIPv6(v) { add(m.start, m.end, notPersonal) }
+            else if hasContext(ipv6Context, t, m.start, m.end, 40) { add(m.start, m.end, "IPV6_ADDRESS") }
+        }
+        for m in macRE.allMatches(text) { add(m.start, m.end, "MAC_ADDRESS") }
         for m in ccRE.allMatches(text) {
             let a = m.start, b = m.end; let val = m.group(0)!
             let dg = val.filter { $0 >= "0" && $0 <= "9" }; if Set(dg).count <= 1 { continue }

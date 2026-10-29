@@ -179,7 +179,7 @@ public final class Redact: @unchecked Sendable {
     }
 
     private func spans(in text: String, options: Options) async throws -> [Span] {
-        let allowed = Set((options.labels ?? Label.defaultEnabled).map(\.rawValue))
+        let allowed = Label.allowed(options.labels)
         return try await model.value().detect(text, minScore: options.minimumConfidence)
             .filter { allowed.contains($0.label) }
             .sorted { $0.start != $1.start ? $0.start < $1.start : $0.end < $1.end }

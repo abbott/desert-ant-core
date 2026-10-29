@@ -329,6 +329,8 @@ enum Pipeline {
                 || left.contains("f\u{00fc}hrerschein") || left.contains("fuhrerschein")
                 || left.contains("rijbewijs") || (left.contains("permis") && left.contains("conduire")) {
                 lab = "DRIVERS_LICENSE"
+            } else if lab == "IP_ADDRESS", let kind = Deterministic.addressLabel(t.slice(s.start, s.end)) {
+                lab = kind
             }
             return Span(s.start, s.end, lab, s.score)
         }

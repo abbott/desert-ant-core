@@ -22,19 +22,60 @@ struct RedactTests {
         #expect(labels.contains("URL"))
     }
 
+    /// The text of each span with `label`.
+    private func found(_ label: String, in text: String) -> [String] {
+        let t = UTF16Text(text)
+        return Deterministic.detect(text).filter { $0.label == label }.map { t.slice($0.start, $0.end) }
+    }
+
     @Test func ipv4NeedsNoContext() {
         // Nothing near these lines says "ip", "address" or "host".
-        let hosts = "127.0.0.1       localhost\n10.2.9.13      hydra-3.lan hydra-3"
-        #expect(Deterministic.detect(hosts).filter { $0.label == "IP_ADDRESS" }.count == 2)
+        let hosts = "10.2.9.11      hydra-1.lan hydra-1\n10.2.9.13      hydra-3.lan hydra-3"
+        #expect(found("IPV4_ADDRESS", in: hosts) == ["10.2.9.11", "10.2.9.13"])
         // A part over 255, or a fifth part, is not an address.
-        #expect(!Deterministic.detect("999.1.1.1 and 1.2.3.4.5").contains { $0.label == "IP_ADDRESS" })
+        #expect(found("IPV4_ADDRESS", in: "999.1.1.1 and 1.2.3.4.5").isEmpty)
     }
 
     @Test func ipv6NeedsContext() {
-        #expect(Deterministic.detect("ff02::1 ip6-allnodes").contains { $0.label == "IP_ADDRESS" })
-        #expect(Deterministic.detect("# /etc/hosts\n::1 localhost").contains { $0.label == "IP_ADDRESS" })
+        #expect(found("IPV6_ADDRESS", in: "2001:db8::5 ip6-myhost") == ["2001:db8::5"])
+        #expect(found("IPV6_ADDRESS", in: "# /etc/hosts\n2001:db8::5 myhost") == ["2001:db8::5"])
         // The same shape as a clock time.
-        #expect(!Deterministic.detect("doors open at 12:30:45 sharp").contains { $0.label == "IP_ADDRESS" })
+        #expect(found("IPV6_ADDRESS", in: "doors open at 12:30:45 sharp").isEmpty)
+    }
+
+    @Test func macAddressHasItsOwnLabel() {
+        let text = "ip link: ether a1:b2:c3:d4:e5:f6 and a1-b2-c3-d4-e5-f7"
+        #expect(found("MAC_ADDRESS", in: text) == ["a1:b2:c3:d4:e5:f6", "a1-b2-c3-d4-e5-f7"])
+        #expect(found("IPV6_ADDRESS", in: text).isEmpty)
+    }
+
+    @Test func wellKnownAddressesAreNotPersonal() {
+        let text = "127.0.0.1 localhost\n0.0.0.0 any\nnetmask 255.255.255.0\n"
+            + "::1 ip6-localhost\nfe00::0 ip6-localnet\nff02::1 ip6-allnodes\nfe80::1 ip6-linklocal"
+        #expect(found(Deterministic.notPersonal, in: text)
+            == ["127.0.0.1", "0.0.0.0", "255.255.255.0", "::1", "fe00::0", "ff02::1"])
+        // Link-local can carry the interface's MAC address.
+        #expect(found("IPV6_ADDRESS", in: text) == ["fe80::1"])
+        // A model span over part of an address, like the ZIP_CODE some builds
+        // report for "127", loses to it, and the result keeps neither.
+        let det = Deterministic.detect(text, enabled: Deterministic.owned.union(["PHONE"]))
+        let kept = Pipeline.resolve(det, [Span(0, 3, "ZIP_CODE")]).filter { Label.allowed(nil).contains($0.label) }
+        #expect(kept.map { UTF16Text(text).slice($0.start, $0.end) } == ["fe80::1"])
+    }
+
+    @Test func modelAddressesTakeTheirKind() {
+        let text = "at 10.0.0.5 or 2001:db8::7 or a1:b2:c3:d4:e5:f6 or 10.0.0"
+        let model = [Span(3, 11, "IP_ADDRESS"), Span(15, 26, "IP_ADDRESS"), Span(30, 47, "IP_ADDRESS"), Span(51, 57, "IP_ADDRESS")]
+        #expect(Pipeline.relabelByContext(text, model).map(\.label) == ["IPV4_ADDRESS", "IPV6_ADDRESS", "MAC_ADDRESS", "IP_ADDRESS"])
+    }
+
+    @Test func ipAddressStillSelectsEveryAddress() {
+        let kinds: Set<String> = ["IP_ADDRESS", "IPV4_ADDRESS", "IPV6_ADDRESS", "MAC_ADDRESS"]
+        // A set from before the address kinds existed.
+        #expect(Label.allowed([.email, .ipAddress]) == kinds.union(["EMAIL"]))
+        // A set that names a kind means exactly what it says.
+        #expect(Label.allowed(Label.defaultEnabled.subtracting([.macAddress])).isDisjoint(with: ["MAC_ADDRESS", "ORG"]))
+        #expect(Label.allowed(nil).isSuperset(of: kinds))
     }
 
     @Test func creditCardIsLuhnGated() {
@@ -102,16 +143,20 @@ struct RedactTests {
                 label = try c.decode(String.self)
             }
         }
-        let enabled: Set<String> = [
-            "EMAIL", "URL", "IP_ADDRESS", "CREDIT_CARD", "BANK_ACCOUNT", "GOVERNMENT_ID",
+        // The reference calls every address kind IP_ADDRESS.
+        let addressKinds: Set<String> = ["IPV4_ADDRESS", "IPV6_ADDRESS", "MAC_ADDRESS"]
+        let enabled: Set<String> = addressKinds.union([
+            "EMAIL", "URL", "CREDIT_CARD", "BANK_ACCOUNT", "GOVERNMENT_ID",
             "TAX_ID", "PASSPORT", "DRIVERS_LICENSE", "IMEI", "SSN", "ROUTING_NUMBER", "PHONE",
-        ]
+        ])
         let url = try #require(Bundle.module.url(forResource: "deterministic_corpus", withExtension: "json"))
         let rows = try JSONDecoder().decode([Row].self, from: try Data(contentsOf: url))
         #expect(rows.count > 1000)
         var failures: [String] = []
         for row in rows {
-            let got = Set(Deterministic.detect(row.text, enabled: enabled).map { "\($0.start),\($0.end),\($0.label)" })
+            let got = Set(Deterministic.detect(row.text, enabled: enabled).map {
+                "\($0.start),\($0.end),\(addressKinds.contains($0.label) ? "IP_ADDRESS" : $0.label)"
+            })
             let want = Set(row.py.map { "\($0.start),\($0.end),\($0.label)" })
             if got != want { failures.append("\(row.text): want \(want.sorted()) got \(got.sorted())") }
         }

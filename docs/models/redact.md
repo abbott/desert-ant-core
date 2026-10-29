@@ -109,7 +109,15 @@ Redact detects `ORG` (an organization or company name), but doesn't redact it by
 
 Redact also flags `IMEI` (a device identifier), with a pattern check instead of the model. The check flags a 15-digit number only when the number passes the Luhn checksum and sits within 32 characters of the word "IMEI".
 
-`IP_ADDRESS` comes from a pattern check too. It flags every IPv4 address, so a four-part version number like `1.0.0.0` is flagged as well. It flags an IPv6 address only within 40 characters of a word like "ip", "ip6", "address", "host", "hosts" or "inet6", because the same shape matches clock times like `12:30:45`.
+Network addresses get their own labels, from pattern checks:
+
+- `IPV4_ADDRESS` for every IPv4 address. A four-part version number like `1.0.0.0` is flagged as well.
+- `IPV6_ADDRESS` for an IPv6 address within 40 characters of a word like "ip", "ip6", "address", "host", "hosts" or "inet6". The same shape matches clock times like `12:30:45`, so an IPv6 address needs the word.
+- `MAC_ADDRESS` for a MAC address, like `a1:b2:c3:d4:e5:f6`.
+
+`IP_ADDRESS` is left for an address the model finds that none of these patterns match. If you pass `IP_ADDRESS` in `labels` without any of the three, Redact redacts all four, as it did before the three had labels of their own.
+
+Redact leaves addresses that are the same on every machine as they are, because they identify no one: loopback (`127.0.0.1`, `::1`), unspecified (`0.0.0.0`), multicast (`224.0.0.0/4`, `ff00::/8`, such as `ff02::1`), reserved and broadcast (`240.0.0.0/4`, which covers netmasks like `255.255.255.0`), and the unassigned `fe00::/9` that hosts files call `ip6-localnet`. Link-local IPv6 addresses (`fe80::/10`) are still redacted, because they can contain the device's MAC address.
 
 ## How it compares
 

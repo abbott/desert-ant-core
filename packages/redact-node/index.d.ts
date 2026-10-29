@@ -3,11 +3,12 @@
 // comes from @desert-ant-labs/core, so it is documented in one place.
 import type { CallOptions, ModelLoadOptions } from "@desert-ant-labs/core";
 
-/** The model labels, the deterministic-only `IMEI`, and `ORG`. */
+/** The model labels, the pattern-only `IMEI` and address kinds, and `ORG`. */
 export type RedactLabel =
   | "GIVEN_NAME" | "SURNAME" | "STREET_NAME" | "BUILDING_NUMBER" | "SECONDARY_ADDRESS"
   | "CITY" | "STATE" | "ZIP_CODE" | "EMAIL" | "PHONE" | "CREDIT_CARD" | "BANK_ACCOUNT"
-  | "ROUTING_NUMBER" | "IP_ADDRESS" | "URL" | "GOVERNMENT_ID" | "PASSPORT"
+  | "ROUTING_NUMBER" | "IP_ADDRESS" | "IPV4_ADDRESS" | "IPV6_ADDRESS" | "MAC_ADDRESS"
+  | "URL" | "GOVERNMENT_ID" | "PASSPORT"
   | "DRIVERS_LICENSE" | "TAX_ID" | "SSN" | "IMEI" | "ORG";
 
 /**
