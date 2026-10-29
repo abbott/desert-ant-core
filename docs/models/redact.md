@@ -117,7 +117,7 @@ Network addresses get their own labels, from pattern checks:
 
 `IP_ADDRESS` is left for an address the model finds that none of these patterns match. If you pass `IP_ADDRESS` in `labels` without any of the three, Redact redacts all four, as it did before the three had labels of their own.
 
-Redact leaves addresses that are the same on every machine as they are, because they identify no one: loopback (`127.0.0.1`, `::1`), unspecified (`0.0.0.0`), multicast (`224.0.0.0/4`, `ff00::/8`, such as `ff02::1`), reserved and broadcast (`240.0.0.0/4`, which covers netmasks like `255.255.255.0`), and the unassigned `fe00::/9` that hosts files call `ip6-localnet`. Link-local IPv6 addresses (`fe80::/10`) are still redacted, because they can contain the device's MAC address.
+Redact leaves addresses that are the same on every machine as they are, because they identify no one: loopback (`127.0.0.1`, `::1`), unspecified (`0.0.0.0`), multicast (`224.0.0.0/4`, `ff00::/8`, such as `ff02::1`), reserved and broadcast (`240.0.0.0/4`, which covers netmasks like `255.255.255.0`), the unassigned `fe00::/9` that hosts files call `ip6-localnet`, and the broadcast and all-zero MAC addresses (`ff:ff:ff:ff:ff:ff`, `00:00:00:00:00:00`). Link-local IPv6 addresses (`fe80::/10`) are still redacted, because they can contain the device's MAC address.
 
 ## How it compares
 

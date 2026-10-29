@@ -301,7 +301,11 @@ enum Deterministic {
             if isWellKnownIPv6(v) { add(m.start, m.end, notPersonal) }
             else if hasContext(ipv6Context, t, m.start, m.end, 40) { add(m.start, m.end, "IPV6_ADDRESS") }
         }
-        for m in macRE.allMatches(text) { add(m.start, m.end, "MAC_ADDRESS") }
+        for m in macRE.allMatches(text) {
+            // Broadcast (all ff) and all-zero name no device.
+            let digits = Set(m.group(0)!.lowercased().filter { $0 != ":" && $0 != "-" })
+            add(m.start, m.end, digits == ["f"] || digits == ["0"] ? notPersonal : "MAC_ADDRESS")
+        }
         for m in ccRE.allMatches(text) {
             let a = m.start, b = m.end; let val = m.group(0)!
             let dg = val.filter { $0 >= "0" && $0 <= "9" }; if Set(dg).count <= 1 { continue }

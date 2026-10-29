@@ -47,6 +47,8 @@ struct RedactTests {
         let text = "ip link: ether a1:b2:c3:d4:e5:f6 and a1-b2-c3-d4-e5-f7"
         #expect(found("MAC_ADDRESS", in: text) == ["a1:b2:c3:d4:e5:f6", "a1-b2-c3-d4-e5-f7"])
         #expect(found("IPV6_ADDRESS", in: text).isEmpty)
+        let shared = "brd ff:ff:ff:ff:ff:ff and 00:00:00:00:00:00"
+        #expect(found(Deterministic.notPersonal, in: shared) == ["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"])
     }
 
     @Test func wellKnownAddressesAreNotPersonal() {
