@@ -10,16 +10,21 @@ import UIKit
 // swaps the personal data for numbered placeholders like [EMAIL_1], on the
 // device. With "Copy automatically" on, every result goes straight to the
 // clipboard, which also replaces the original you pasted from it. The whole SDK
-// surface used here is `Redact()`, `download()` and `redaction(of:)`.
+// surface used here is `Redact()`, `download()` and `redaction(of:options:)`.
 
 struct ContentView: View {
     @State private var input = ""
     @State private var result: Redaction?
-    @State private var resultSource = ""   // the input `result` was computed from
+    @State private var resultSource = ""         // the input `result` was computed from
+    @State private var resultRedactsURLs = true  // and the URL setting it was computed with
     @State private var status = "Loading model…"
     @State private var statusIsError = false
     @State private var redactTask: Task<Void, Never>?
     @AppStorage("copyAutomatically") private var copyAutomatically = true
+    // Redact masks every http(s), ftp and www URL with a pattern, whatever the
+    // host, so logs and configs full of public URLs come back mostly
+    // placeholders. Off keeps URLs, including any personal data inside them.
+    @AppStorage("redactURLs") private var redactURLs = true
 
     // Held in @State so the loaded model survives the view being re-created.
     @State private var redact = Redact()
@@ -42,13 +47,16 @@ struct ContentView: View {
                 HStack {
                     Text("Redacted").font(.headline)
                     Spacer()
-                    Toggle("Copy automatically", isOn: $copyAutomatically)
-                        .toggleStyle(.switch)
-                        .fixedSize()
                     Button("Copy", systemImage: "doc.on.doc") { copyResult() }
                         .disabled(!isCurrent)
                 }
                 output
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Copy automatically", isOn: $copyAutomatically)
+                    Toggle("Redact URLs", isOn: $redactURLs)
+                }
+                .toggleStyle(.switch)
 
                 Text(status)
                     .font(.footnote)
@@ -62,6 +70,7 @@ struct ContentView: View {
         }
         .task { await loadModel() }
         .onChange(of: input) { schedule() }
+        .onChange(of: redactURLs) { schedule() }
     }
 
     // MARK: Sections
@@ -98,9 +107,11 @@ struct ContentView: View {
 
     // MARK: Redacting (debounced, drops superseded runs)
 
-    /// Whether the shown result belongs to the text in the editor, so Copy never
-    /// hands out a redaction of text the user has since changed.
-    private var isCurrent: Bool { result != nil && resultSource == input }
+    /// Whether the shown result belongs to the text in the editor and the
+    /// current settings, so Copy never hands out a stale redaction.
+    private var isCurrent: Bool {
+        result != nil && resultSource == input && resultRedactsURLs == redactURLs
+    }
 
     private func loadModel() async {
         do {
@@ -129,12 +140,14 @@ struct ContentView: View {
             statusIsError = false
             return
         }
+        let redactsURLs = redactURLs
         status = "Redacting…"
         do {
-            let r = try await redact.redaction(of: text)
-            guard !Task.isCancelled, text == input else { return }
+            let r = try await redact.redaction(of: text, options: redactsURLs ? .init() : .keepingURLs)
+            guard !Task.isCancelled, text == input, redactsURLs == redactURLs else { return }
             result = r
             resultSource = text
+            resultRedactsURLs = redactsURLs
             statusIsError = false
             let found = r.items.isEmpty ? "No personal data found"
                 : r.items.count == 1 ? "1 item redacted" : "\(r.items.count) items redacted"

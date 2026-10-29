@@ -15,5 +15,6 @@ The project builds Redact from this checkout. The first redaction downloads the 
 1. Press **Paste**, or type into the top box. Redact runs as soon as the text changes.
 2. With **Copy automatically** on (the default), each result goes straight to the clipboard. That also replaces the original text you pasted from it.
 3. With it off, press **Copy** when you want the redacted text.
+4. Turn **Redact URLs** off to keep links. Redact masks every `http`, `https`, `ftp` and `www` URL with a pattern, whatever the host, so logs and configs full of public URLs, like package mirrors, come back mostly placeholders. With it off, personal data inside a URL, like a token or an email in a query string, stays too.
 
-**Copy** is disabled while a new result is being computed, so it never copies a redaction of text you have since changed.
+**Copy** is disabled while a new result is being computed, so it never copies a stale redaction.
