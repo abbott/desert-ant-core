@@ -109,6 +109,8 @@ Redact detects `ORG` (an organization or company name), but doesn't redact it by
 
 Redact also flags `IMEI` (a device identifier), with a pattern check instead of the model. The check flags a 15-digit number only when the number passes the Luhn checksum and sits within 32 characters of the word "IMEI".
 
+`IP_ADDRESS` comes from a pattern check too. It flags every IPv4 address, so a four-part version number like `1.0.0.0` is flagged as well. It flags an IPv6 address only within 40 characters of a word like "ip", "ip6", "address", "host", "hosts" or "inet6", because the same shape matches clock times like `12:30:45`.
+
 ## How it compares
 
 We scored every system below with the same scoring code, on the same rows. Each system ran at its own operating point.

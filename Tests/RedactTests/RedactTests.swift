@@ -22,6 +22,21 @@ struct RedactTests {
         #expect(labels.contains("URL"))
     }
 
+    @Test func ipv4NeedsNoContext() {
+        // Nothing near these lines says "ip", "address" or "host".
+        let hosts = "127.0.0.1       localhost\n10.2.9.13      hydra-3.lan hydra-3"
+        #expect(Deterministic.detect(hosts).filter { $0.label == "IP_ADDRESS" }.count == 2)
+        // A part over 255, or a fifth part, is not an address.
+        #expect(!Deterministic.detect("999.1.1.1 and 1.2.3.4.5").contains { $0.label == "IP_ADDRESS" })
+    }
+
+    @Test func ipv6NeedsContext() {
+        #expect(Deterministic.detect("ff02::1 ip6-allnodes").contains { $0.label == "IP_ADDRESS" })
+        #expect(Deterministic.detect("# /etc/hosts\n::1 localhost").contains { $0.label == "IP_ADDRESS" })
+        // The same shape as a clock time.
+        #expect(!Deterministic.detect("doors open at 12:30:45 sharp").contains { $0.label == "IP_ADDRESS" })
+    }
+
     @Test func creditCardIsLuhnGated() {
         // valid Luhn + context means detected
         let ok = Deterministic.detect("charge my card 4539 1488 0343 6467")

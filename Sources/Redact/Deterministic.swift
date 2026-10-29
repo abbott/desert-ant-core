@@ -45,7 +45,9 @@ enum Deterministic {
     private static let passportKwRE = rx(#"^(passport|passeport|reisepass|pasaporte|passaporto|paspoort)"#, ci: true)
 
     // MARK: context patterns
-    private static let ipContext = rx(#"\b(?:ip|ipv4|ipv6|address|addr|host|server|node|endpoint|cidr)\b|地址"#, ci: true)
+    // IPv6 only. Its shape also matches clock times like 12:30:45, so it needs one
+    // of these words nearby. `ip6` catches hosts-file aliases like ip6-localhost.
+    private static let ipv6Context = rx(#"\b(?:ip|ipv4|ipv6|ip6|address|addr|hosts?|inet6?|nameserver|gateway|server|node|endpoint|cidr)\b|地址"#, ci: true)
     private static let routingContext = rx(#"\b(?:routing|aba|bank|wire|ach)\b"#, ci: true)
     private static let ssnContext = rx(#"\b(?:ssn|social security|social insurance|social number|sin|seguridad social)\b|社保|社会保障|사회보장"#, ci: true)
     private static let taxContext = rx(#"\b(?:tax|taxnum|tax number|tax identification|tin|vat|npwp)\b|税号|税|세금"#, ci: true)
@@ -259,8 +261,11 @@ enum Deterministic {
 
         for m in emailRE.allMatches(text) { if let g = m.range(at: 1) { add(g.start, g.end, "EMAIL") } }
         for m in urlRE.allMatches(text) { guard let g = m.range(at: 1) else { continue }; if g.start > 0, t.slice(g.start - 1, g.start) == "@" { continue }; add(g.start, g.end, "URL") }
-        for m in ipv4RE.allMatches(text) { if isIp(m.group(0)!) && hasContext(ipContext, t, m.start, m.end, 40) { add(m.start, m.end, "IP_ADDRESS") } }
-        for m in ipv6RE.allMatches(text) { let v = m.group(0)!; if v == ":" || v == "::" { continue }; if isIp(v) && hasContext(ipContext, t, m.start, m.end, 40) { add(m.start, m.end, "IP_ADDRESS") } }
+        // No context for IPv4, unlike the Python reference: a hosts file or `ip addr`
+        // output rarely says "ip" or "address" next to each line, and missing an
+        // address costs more than masking a four-part version like 1.0.0.0.
+        for m in ipv4RE.allMatches(text) { if isIp(m.group(0)!) { add(m.start, m.end, "IP_ADDRESS") } }
+        for m in ipv6RE.allMatches(text) { let v = m.group(0)!; if v == ":" || v == "::" { continue }; if isIp(v) && hasContext(ipv6Context, t, m.start, m.end, 40) { add(m.start, m.end, "IP_ADDRESS") } }
         for m in macRE.allMatches(text) { add(m.start, m.end, "IP_ADDRESS") }
         for m in ccRE.allMatches(text) {
             let a = m.start, b = m.end; let val = m.group(0)!
