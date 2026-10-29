@@ -18,3 +18,18 @@ The project builds Redact from this checkout. The first redaction downloads the 
 4. Turn **Redact URLs** off to keep links. Redact masks every `http`, `https`, `ftp` and `www` URL with a pattern, whatever the host, so logs and configs full of public URLs, like package mirrors, come back mostly placeholders. With it off, personal data inside a URL, like a token or an email in a query string, stays too.
 
 **Copy** is disabled while a new result is being computed, so it never copies a stale redaction.
+
+## Report
+
+Press **Report** in the toolbar (⌥⌘I on a Mac) to show or hide a sidebar listing everything Redact masked: each placeholder, the original text, its label and the confidence. Each category has its own color, and the placeholders in the redacted text use the same colors:
+
+| Category | Labels |
+| --- | --- |
+| Name | given name, surname |
+| Contact | email, phone, URL |
+| Address | street, building number, unit, city, state, postal code |
+| Finance | card, bank account, routing number |
+| ID | government ID, passport, driver's license, tax ID, SSN |
+| Network | IPv4, IPv6 and MAC addresses, IMEI |
+
+Turn a category off, or type in **Search**, to narrow the list. Filtering changes only the list, not what gets redacted or copied. On a Mac the report opens beside the text and starts open. On an iPhone it opens as a sheet and starts closed.

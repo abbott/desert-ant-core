@@ -9,5 +9,9 @@ struct RedactClipboardExampleApp: App {
                 .frame(minWidth: 520, minHeight: 480)
                 #endif
         }
+        #if os(macOS)
+        // Room for the text and the report side by side.
+        .defaultSize(width: 900, height: 600)
+        #endif
     }
 }

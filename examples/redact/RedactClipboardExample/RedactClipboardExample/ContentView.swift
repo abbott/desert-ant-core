@@ -25,6 +25,13 @@ struct ContentView: View {
     // host, so logs and configs full of public URLs come back mostly
     // placeholders. Off keeps URLs, including any personal data inside them.
     @AppStorage("redactURLs") private var redactURLs = true
+    // On a Mac the report opens beside the text. On an iPhone it is a sheet over
+    // it, so it starts closed there.
+    #if os(macOS)
+    @AppStorage("showReport") private var showReport = true
+    #else
+    @AppStorage("showReport") private var showReport = false
+    #endif
 
     // Held in @State so the loaded model survives the view being re-created.
     @State private var redact = Redact()
@@ -67,6 +74,14 @@ struct ContentView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            .inspector(isPresented: $showReport) {
+                ReportView(items: result?.items ?? [], isCurrent: isCurrent)
+                    .inspectorColumnWidth(min: 240, ideal: 300, max: 420)
+            }
+            .toolbar {
+                Button("Report", systemImage: "sidebar.right") { showReport.toggle() }
+                    .keyboardShortcut("i", modifiers: [.command, .option])
+            }
         }
         .task { await loadModel() }
         .onChange(of: input) { schedule() }
@@ -94,7 +109,7 @@ struct ContentView: View {
 
     private var output: some View {
         ScrollView {
-            Text(result?.redactedText ?? "")
+            Text(coloredOutput)
                 .font(.body.monospaced())
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,6 +118,23 @@ struct ContentView: View {
         .frame(minHeight: 140)
         .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
         .opacity(isCurrent ? 1 : 0.5)
+    }
+
+    /// The redacted text with each placeholder in its category's color, as in
+    /// the report. Copy still takes the plain `redactedText`.
+    private var coloredOutput: AttributedString {
+        guard let result else { return AttributedString() }
+        var out = AttributedString()
+        for segment in result.segments(of: resultSource) {
+            var run = AttributedString(segment.text)
+            if let item = segment.item {
+                let color: Color = Category(item.label).color
+                run.foregroundColor = color
+                run.backgroundColor = color.opacity(0.15)
+            }
+            out += run
+        }
+        return out
     }
 
     // MARK: Redacting (debounced, drops superseded runs)
